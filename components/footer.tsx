@@ -85,6 +85,9 @@ export function Footer() {
           <p className="text-sm text-muted-foreground">
             2025 RateMyPsych. All rights reserved. Not a substitute for professional medical advice.
           </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Provider data is sourced from the NPPES NPI Registry. Contact us to request corrections or removals.
+          </p>
         </div>
       </div>
     </footer>

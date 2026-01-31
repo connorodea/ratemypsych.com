@@ -16,42 +16,60 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Switch } from "@/components/ui/switch"
+import { signIn, useSession } from "next-auth/react"
 import { PenLine, CheckCircle2 } from "lucide-react"
 
 interface ReviewFormProps {
-  psychiatristId: string
+  providerId: string
 }
 
-export function ReviewForm({ psychiatristId }: ReviewFormProps) {
+export function ReviewForm({ providerId }: ReviewFormProps) {
+  const { data: session } = useSession()
   const [open, setOpen] = useState(false)
   const [rating, setRating] = useState(0)
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [submitted, setSubmitted] = useState(false)
-  const [name, setName] = useState("")
+  const [isAnonymous, setIsAnonymous] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    // In a real app, this would send the review to a database
-    // All reviews are submitted anonymously to protect patient privacy
-    console.log("Review submitted:", {
-      psychiatristId,
-      rating,
-      title,
-      content,
-      authorName: "Anonymous",
+    setError(null)
+
+    if (!session?.user) {
+      await signIn()
+      return
+    }
+
+    const response = await fetch("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        providerId,
+        rating,
+        title,
+        content,
+        isAnonymous,
+      }),
     })
 
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      setError(payload?.error || "Unable to submit review.")
+      return
+    }
+
     setSubmitted(true)
-    
-    // Reset form after delay
+
     setTimeout(() => {
       setOpen(false)
       setSubmitted(false)
       setRating(0)
       setTitle("")
       setContent("")
+      setIsAnonymous(true)
     }, 2000)
   }
 
@@ -88,6 +106,11 @@ export function ReviewForm({ psychiatristId }: ReviewFormProps) {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+              {!session?.user && (
+                <div className="rounded-lg border border-border bg-secondary/30 p-4 text-sm text-muted-foreground">
+                  Please sign in to submit a review.
+                </div>
+              )}
               {/* Rating */}
               <div className="space-y-2">
                 <Label>Your Rating *</Label>
@@ -134,6 +157,16 @@ export function ReviewForm({ psychiatristId }: ReviewFormProps) {
                 </p>
               </div>
 
+              <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+                <div>
+                  <Label className="text-sm">Post anonymously</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Your name will not be shown publicly.
+                  </p>
+                </div>
+                <Switch checked={isAnonymous} onCheckedChange={setIsAnonymous} />
+              </div>
+
               {/* Submit */}
               <div className="flex justify-end gap-3">
                 <Button
@@ -143,10 +176,11 @@ export function ReviewForm({ psychiatristId }: ReviewFormProps) {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={!isValid}>
+                <Button type="submit" disabled={!isValid || !session?.user}>
                   Submit Review
                 </Button>
               </div>
+              {error && <p className="text-sm text-red-600">{error}</p>}
             </form>
           </>
         )}

@@ -7,7 +7,8 @@ import { ReviewForm } from "@/components/review-form"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { psychiatrists, reviews } from "@/lib/data"
+import { prisma } from "@/lib/db"
+import type { ReviewItem } from "@/lib/types"
 import { 
   MapPin, 
   Phone, 
@@ -21,18 +22,51 @@ import {
 } from "lucide-react"
 
 interface PageProps {
-  params: Promise<{ id: string }>
+  params: { id: string }
 }
 
+function toReviewItem(review: {
+  id: string
+  rating: number
+  title: string
+  content: string
+  createdAt: Date
+  helpfulCount: number
+  isAnonymous: boolean
+  user: { name: string | null }
+}): ReviewItem {
+  return {
+    id: review.id,
+    rating: review.rating,
+    title: review.title,
+    content: review.content,
+    createdAt: review.createdAt.toISOString(),
+    helpfulCount: review.helpfulCount,
+    isAnonymous: review.isAnonymous,
+    authorName: review.user.name,
+    verified: false,
+    tags: [],
+  }
+}
+
+export const revalidate = 60
+
 export default async function PsychiatristPage({ params }: PageProps) {
-  const { id } = await params
-  const psychiatrist = psychiatrists.find((p) => p.id === id)
+  const psychiatrist = await prisma.provider.findUnique({
+    where: { slug: params.id },
+  })
 
   if (!psychiatrist) {
     notFound()
   }
 
-  const psychiatristReviews = reviews.filter((r) => r.psychiatristId === id)
+  const psychiatristReviews = await prisma.review.findMany({
+    where: { providerId: psychiatrist.id, status: "APPROVED" },
+    include: { user: true },
+    orderBy: { createdAt: "desc" },
+  })
+
+  const reviewItems = psychiatristReviews.map(toReviewItem)
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -51,21 +85,21 @@ export default async function PsychiatristPage({ params }: PageProps) {
               {/* Info */}
               <div className="flex-1 text-center md:text-left">
                 <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-1">
-                  {psychiatrist.name}
+                  {psychiatrist.fullName}
                 </h1>
                 <p className="text-muted-foreground mb-4">
-                  {psychiatrist.credentials}
+                  {psychiatrist.credential || "Psychiatrist"}
                 </p>
 
                 <div className="flex items-center justify-center md:justify-start gap-3 mb-4">
-                  <StarRating rating={psychiatrist.rating} size="md" showValue />
+                  <StarRating rating={psychiatrist.averageRating} size="md" showValue />
                   <span className="text-muted-foreground">
                     ({psychiatrist.reviewCount} reviews)
                   </span>
                 </div>
 
                 <div className="flex flex-wrap justify-center md:justify-start gap-2 mb-4">
-                  {psychiatrist.specialty.map((spec) => (
+                  {psychiatrist.specialties.map((spec) => (
                     <Badge key={spec} variant="secondary">
                       {spec}
                     </Badge>
@@ -73,15 +107,20 @@ export default async function PsychiatristPage({ params }: PageProps) {
                 </div>
 
                 <div className="flex items-center justify-center md:justify-start gap-2">
-                  {psychiatrist.acceptingPatients ? (
+                  {psychiatrist.acceptingNewPatients === true ? (
                     <Badge className="bg-emerald-600 hover:bg-emerald-600">
                       <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                       Accepting New Patients
                     </Badge>
-                  ) : (
+                  ) : psychiatrist.acceptingNewPatients === false ? (
                     <Badge variant="outline">
                       <XCircle className="h-3.5 w-3.5 mr-1" />
                       Not Accepting New Patients
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline">
+                      <XCircle className="h-3.5 w-3.5 mr-1" />
+                      Availability Unknown
                     </Badge>
                   )}
                 </div>
@@ -99,7 +138,7 @@ export default async function PsychiatristPage({ params }: PageProps) {
                 <TabsList className="w-full justify-start mb-6">
                   <TabsTrigger value="about">About</TabsTrigger>
                   <TabsTrigger value="reviews">
-                    Reviews ({psychiatristReviews.length})
+                    Reviews ({reviewItems.length})
                   </TabsTrigger>
                 </TabsList>
 
@@ -110,7 +149,7 @@ export default async function PsychiatristPage({ params }: PageProps) {
                     </CardHeader>
                     <CardContent>
                       <p className="text-muted-foreground leading-relaxed">
-                        {psychiatrist.bio}
+                        {psychiatrist.bio || "No biography has been added yet."}
                       </p>
                     </CardContent>
                   </Card>
@@ -123,13 +162,19 @@ export default async function PsychiatristPage({ params }: PageProps) {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <ul className="space-y-2">
-                        {psychiatrist.education.map((edu, index) => (
-                          <li key={index} className="text-muted-foreground">
-                            {edu}
-                          </li>
-                        ))}
-                      </ul>
+                      {psychiatrist.education.length > 0 ? (
+                        <ul className="space-y-2">
+                          {psychiatrist.education.map((edu, index) => (
+                            <li key={index} className="text-muted-foreground">
+                              {edu}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-muted-foreground">
+                          Education details are not available yet.
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -141,13 +186,19 @@ export default async function PsychiatristPage({ params }: PageProps) {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="flex flex-wrap gap-2">
-                        {psychiatrist.languages.map((lang) => (
-                          <Badge key={lang} variant="outline">
-                            {lang}
-                          </Badge>
-                        ))}
-                      </div>
+                      {psychiatrist.languages.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {psychiatrist.languages.map((lang) => (
+                            <Badge key={lang} variant="outline">
+                              {lang}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground">
+                          Language details are not available yet.
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -159,24 +210,24 @@ export default async function PsychiatristPage({ params }: PageProps) {
                       <div className="flex flex-col md:flex-row md:items-center gap-6">
                         <div className="text-center md:text-left">
                           <p className="text-5xl font-bold text-foreground mb-2">
-                            {psychiatrist.rating.toFixed(1)}
+                            {psychiatrist.averageRating.toFixed(1)}
                           </p>
-                          <StarRating rating={psychiatrist.rating} size="md" />
+                          <StarRating rating={psychiatrist.averageRating} size="md" />
                           <p className="text-sm text-muted-foreground mt-2">
                             Based on {psychiatrist.reviewCount} reviews
                           </p>
                         </div>
                         <div className="flex-1">
-                          <ReviewForm psychiatristId={psychiatrist.id} />
+                          <ReviewForm providerId={psychiatrist.id} />
                         </div>
                       </div>
                     </CardContent>
                   </Card>
 
                   {/* Reviews List */}
-                  {psychiatristReviews.length > 0 ? (
+                  {reviewItems.length > 0 ? (
                     <div className="space-y-4">
-                      {psychiatristReviews.map((review) => (
+                      {reviewItems.map((review) => (
                         <ReviewCard key={review.id} review={review} />
                       ))}
                     </div>
@@ -204,10 +255,10 @@ export default async function PsychiatristPage({ params }: PageProps) {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <p className="text-muted-foreground">
-                    {psychiatrist.location.address}
+                    {psychiatrist.practiceAddress1 || "Address not listed"}
                   </p>
                   <p className="text-muted-foreground">
-                    {psychiatrist.location.city}, {psychiatrist.location.state}
+                    {psychiatrist.practiceCity || "City"}, {psychiatrist.practiceState || "US"}
                   </p>
                 </CardContent>
               </Card>
@@ -220,9 +271,15 @@ export default async function PsychiatristPage({ params }: PageProps) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <p className="text-muted-foreground">
-                    Contact the office directly for appointments
-                  </p>
+                  {psychiatrist.practicePhone ? (
+                    <p className="text-muted-foreground">
+                      {psychiatrist.practicePhone}
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      Contact the office directly for appointments.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
 
@@ -234,13 +291,17 @@ export default async function PsychiatristPage({ params }: PageProps) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {psychiatrist.acceptingPatients ? (
+                  {psychiatrist.acceptingNewPatients === true ? (
                     <p className="text-emerald-600 font-medium">
                       Currently accepting new patients
                     </p>
-                  ) : (
+                  ) : psychiatrist.acceptingNewPatients === false ? (
                     <p className="text-muted-foreground">
                       Not accepting new patients at this time
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      Availability not listed
                     </p>
                   )}
                 </CardContent>
@@ -254,13 +315,19 @@ export default async function PsychiatristPage({ params }: PageProps) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {psychiatrist.insuranceAccepted.map((insurance) => (
-                      <Badge key={insurance} variant="outline" className="text-xs">
-                        {insurance}
-                      </Badge>
-                    ))}
-                  </div>
+                  {psychiatrist.insuranceAccepted.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {psychiatrist.insuranceAccepted.map((insurance) => (
+                        <Badge key={insurance} variant="outline" className="text-xs">
+                          {insurance}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      Insurance information is not available yet.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             </div>

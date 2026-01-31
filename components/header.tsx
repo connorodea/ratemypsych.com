@@ -4,9 +4,11 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Search, Menu, X } from "lucide-react"
 import { useState } from "react"
+import { signIn, signOut, useSession } from "next-auth/react"
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { data: session } = useSession()
 
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
@@ -47,7 +49,28 @@ export function Header() {
                 Search
               </Link>
             </Button>
-            <Button size="sm">Write a Review</Button>
+            <Button size="sm" asChild>
+              <Link href={session?.user ? "/search" : "/auth/login"}>
+                Write a Review
+              </Link>
+            </Button>
+            {session?.user ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => signOut()}
+              >
+                Sign Out
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => signIn()}
+              >
+                Sign In
+              </Button>
+            )}
           </div>
 
           <button
@@ -94,7 +117,28 @@ export function Header() {
                     Search
                   </Link>
                 </Button>
-                <Button size="sm">Write a Review</Button>
+                <Button size="sm" asChild>
+                  <Link href={session?.user ? "/search" : "/auth/login"}>
+                    Write a Review
+                  </Link>
+                </Button>
+                {session?.user ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => signOut()}
+                  >
+                    Sign Out
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => signIn()}
+                  >
+                    Sign In
+                  </Button>
+                )}
               </div>
             </nav>
           </div>

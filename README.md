@@ -16,6 +16,31 @@ Your project is live at:
 
 **[https://vercel.com/connorodeas-projects/v0-ratemypsych-com](https://vercel.com/connorodeas-projects/v0-ratemypsych-com)**
 
+## Local Development
+
+1. Copy `.env.example` to `.env` and fill in `DATABASE_URL` and `NEXTAUTH_SECRET`.
+2. Install dependencies: `pnpm install`
+3. Generate Prisma client: `pnpm db:generate`
+4. Run migrations: `pnpm db:migrate`
+5. Start the dev server: `pnpm dev`
+
+## Data Ingestion (NPPES)
+
+Download and ingest NPPES data (psychiatry-focused) into Postgres:
+
+```
+pnpm ingest:nppes --url=https://download.cms.gov/nppes/NPPES_Data_Dissemination_YYYYMMDD.zip
+```
+
+You can also point to a local zip:
+
+```
+pnpm ingest:nppes --zip=/path/to/nppes.zip
+```
+
+The ingestion script filters for psychiatry taxonomy codes and upserts providers.
+If no URL is provided, it will fetch the latest NPPES zip from the CMS index.
+
 ## Build your app
 
 Continue building your app on:

@@ -5,16 +5,17 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { StarRating } from "@/components/star-rating"
 import { ThumbsUp, CheckCircle } from "lucide-react"
-import type { Review } from "@/lib/data"
+import type { ReviewItem } from "@/lib/types"
 import { useState } from "react"
 
 interface ReviewCardProps {
-  review: Review
+  review: ReviewItem
 }
 
 export function ReviewCard({ review }: ReviewCardProps) {
-  const [helpfulCount, setHelpfulCount] = useState(review.helpful)
+  const [helpfulCount, setHelpfulCount] = useState(review.helpfulCount)
   const [hasVoted, setHasVoted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -24,10 +25,22 @@ export function ReviewCard({ review }: ReviewCardProps) {
     })
   }
 
-  const handleHelpful = () => {
-    if (!hasVoted) {
-      setHelpfulCount((prev) => prev + 1)
-      setHasVoted(true)
+  const handleHelpful = async () => {
+    if (hasVoted || isSubmitting) return
+    setIsSubmitting(true)
+    setHelpfulCount((prev) => prev + 1)
+    setHasVoted(true)
+    try {
+      await fetch("/api/reviews/helpful", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviewId: review.id }),
+      })
+    } catch {
+      setHelpfulCount((prev) => Math.max(prev - 1, 0))
+      setHasVoted(false)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -38,7 +51,7 @@ export function ReviewCard({ review }: ReviewCardProps) {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="font-medium text-foreground">
-                Anonymous
+                {review.isAnonymous ? "Anonymous" : review.authorName || "Anonymous"}
               </span>
               {review.verified && (
                 <Badge variant="secondary" className="text-xs">
@@ -48,7 +61,7 @@ export function ReviewCard({ review }: ReviewCardProps) {
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              {formatDate(review.date)}
+              {formatDate(review.createdAt)}
             </p>
           </div>
           <StarRating rating={review.rating} size="sm" />

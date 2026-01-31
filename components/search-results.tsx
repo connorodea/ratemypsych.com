@@ -1,7 +1,7 @@
 "use client"
 
-import { useSearchParams } from "next/navigation"
-import { useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
 import { SearchForm } from "@/components/search-form"
 import { PsychiatristCard } from "@/components/psychiatrist-card"
 import { Button } from "@/components/ui/button"
@@ -12,59 +12,74 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { psychiatrists } from "@/lib/data"
+import type { ProviderCard } from "@/lib/types"
 import { SlidersHorizontal } from "lucide-react"
 
 export function SearchResults() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const query = searchParams.get("q") || ""
   const specialty = searchParams.get("specialty") || ""
   const state = searchParams.get("state") || ""
   
-  const [sortBy, setSortBy] = useState("rating")
-  const [acceptingOnly, setAcceptingOnly] = useState(false)
+  const sortParam = searchParams.get("sort") || "rating"
+  const acceptingParam = searchParams.get("acceptingOnly") === "true"
+  const [sortBy, setSortBy] = useState(sortParam)
+  const [acceptingOnly, setAcceptingOnly] = useState(acceptingParam)
+  const [results, setResults] = useState<ProviderCard[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const filteredResults = useMemo(() => {
-    let results = [...psychiatrists]
+  const updateParams = (updates: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams.toString())
+    Object.entries(updates).forEach(([key, value]) => {
+      if (!value || value === "all") {
+        params.delete(key)
+      } else {
+        params.set(key, value)
+      }
+    })
+    router.push(`/search?${params.toString()}`)
+  }
 
-    // Filter by search query
-    if (query) {
-      const lowerQuery = query.toLowerCase()
-      results = results.filter(
-        (p) =>
-          p.name.toLowerCase().includes(lowerQuery) ||
-          p.specialty.some((s) => s.toLowerCase().includes(lowerQuery)) ||
-          p.bio.toLowerCase().includes(lowerQuery)
-      )
-    }
+  useEffect(() => {
+    setSortBy(sortParam)
+  }, [sortParam])
 
-    // Filter by specialty
-    if (specialty && specialty !== "all") {
-      results = results.filter((p) =>
-        p.specialty.some((s) => s.toLowerCase() === specialty.toLowerCase())
-      )
-    }
+  useEffect(() => {
+    setAcceptingOnly(acceptingParam)
+  }, [acceptingParam])
 
-    // Filter by state
-    if (state && state !== "all") {
-      results = results.filter((p) => p.location.state === state)
-    }
+  useEffect(() => {
+    const controller = new AbortController()
+    const params = new URLSearchParams()
+    if (query) params.set("q", query)
+    if (specialty) params.set("specialty", specialty)
+    if (state) params.set("state", state)
+    params.set("sort", sortBy)
+    if (acceptingOnly) params.set("acceptingOnly", "true")
 
-    // Filter by accepting patients
-    if (acceptingOnly) {
-      results = results.filter((p) => p.acceptingPatients)
-    }
+    setIsLoading(true)
+    setError(null)
 
-    // Sort results
-    if (sortBy === "rating") {
-      results.sort((a, b) => b.rating - a.rating)
-    } else if (sortBy === "reviews") {
-      results.sort((a, b) => b.reviewCount - a.reviewCount)
-    } else if (sortBy === "name") {
-      results.sort((a, b) => a.name.localeCompare(b.name))
-    }
+    fetch(`/api/providers?${params.toString()}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Unable to load providers.")
+        }
+        return response.json()
+      })
+      .then((payload) => {
+        setResults(payload.providers || [])
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") {
+          setError("Unable to load providers.")
+        }
+      })
+      .finally(() => setIsLoading(false))
 
-    return results
+    return () => controller.abort()
   }, [query, specialty, state, sortBy, acceptingOnly])
 
   const searchDescription = useMemo(() => {
@@ -94,19 +109,24 @@ export function SearchResults() {
             {searchDescription}
           </h1>
           <p className="text-muted-foreground">
-            {filteredResults.length} psychiatrist{filteredResults.length !== 1 ? "s" : ""} found
+            {results.length} psychiatrist{results.length !== 1 ? "s" : ""} found
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Button
             variant={acceptingOnly ? "default" : "outline"}
             size="sm"
-            onClick={() => setAcceptingOnly(!acceptingOnly)}
+            onClick={() =>
+              updateParams({ acceptingOnly: acceptingOnly ? null : "true" })
+            }
           >
             <SlidersHorizontal className="h-4 w-4 mr-2" />
             Accepting Patients
           </Button>
-          <Select value={sortBy} onValueChange={setSortBy}>
+          <Select
+            value={sortBy}
+            onValueChange={(value) => updateParams({ sort: value })}
+          >
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
@@ -120,9 +140,17 @@ export function SearchResults() {
       </div>
 
       {/* Results Grid */}
-      {filteredResults.length > 0 ? (
+      {isLoading ? (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredResults.map((psychiatrist) => (
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-48 bg-muted rounded-xl animate-pulse" />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="text-center py-16 text-muted-foreground">{error}</div>
+      ) : results.length > 0 ? (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {results.map((psychiatrist) => (
             <PsychiatristCard key={psychiatrist.id} psychiatrist={psychiatrist} />
           ))}
         </div>

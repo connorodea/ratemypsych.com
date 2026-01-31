@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Search } from "lucide-react"
-import { specialties, states } from "@/lib/data"
+import { specialties, states } from "@/lib/constants"
 
 interface SearchFormProps {
   variant?: "hero" | "compact"

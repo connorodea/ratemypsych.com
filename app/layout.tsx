@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
+import { AuthProvider } from "@/components/auth-provider"
 import { Poppins as V0_Font_Poppins, Open_Sans as V0_Font_Open_Sans, Prompt as V0_Font_Prompt } from 'next/font/google'
 
 // Initialize fonts
@@ -42,7 +43,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans antialiased`}>
-        {children}
+        <AuthProvider>{children}</AuthProvider>
         <Analytics />
       </body>
     </html>

@@ -4,12 +4,56 @@ import { SearchForm } from "@/components/search-form"
 import { PsychiatristCard } from "@/components/psychiatrist-card"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { psychiatrists, specialties } from "@/lib/data"
+import { specialties } from "@/lib/constants"
+import { prisma } from "@/lib/db"
+import type { ProviderCard } from "@/lib/types"
 import { Shield, MessageSquare, Search, Users, ArrowRight } from "lucide-react"
 import Link from "next/link"
 
-export default function HomePage() {
-  const topRated = psychiatrists.slice(0, 3)
+export const revalidate = 60
+
+function toProviderCard(provider: {
+  id: string
+  slug: string
+  fullName: string
+  credential: string | null
+  specialties: string[]
+  practiceCity: string | null
+  practiceState: string | null
+  practiceAddress1: string | null
+  averageRating: number
+  reviewCount: number
+  acceptingNewPatients: boolean | null
+}): ProviderCard {
+  return {
+    id: provider.id,
+    slug: provider.slug,
+    name: provider.fullName,
+    credential: provider.credential,
+    specialty: provider.specialties,
+    location: {
+      city: provider.practiceCity,
+      state: provider.practiceState,
+      address: provider.practiceAddress1,
+    },
+    rating: provider.averageRating,
+    reviewCount: provider.reviewCount,
+    acceptingNewPatients: provider.acceptingNewPatients,
+  }
+}
+
+export default async function HomePage() {
+  const [topRatedProviders, providerCount, reviewCount] = await Promise.all([
+    prisma.provider.findMany({
+      where: { active: true },
+      orderBy: { averageRating: "desc" },
+      take: 3,
+    }),
+    prisma.provider.count({ where: { active: true } }),
+    prisma.review.count({ where: { status: "APPROVED" } }),
+  ])
+
+  const topRated = topRatedProviders.map(toProviderCard)
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -48,11 +92,15 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
               <div>
-                <p className="text-3xl md:text-4xl font-bold text-primary mb-2">10,000+</p>
+                <p className="text-3xl md:text-4xl font-bold text-primary mb-2">
+                  {providerCount.toLocaleString()}
+                </p>
                 <p className="text-sm text-muted-foreground">Psychiatrists Listed</p>
               </div>
               <div>
-                <p className="text-3xl md:text-4xl font-bold text-primary mb-2">50,000+</p>
+                <p className="text-3xl md:text-4xl font-bold text-primary mb-2">
+                  {reviewCount.toLocaleString()}
+                </p>
                 <p className="text-sm text-muted-foreground">Patient Reviews</p>
               </div>
               <div>

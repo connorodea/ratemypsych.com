@@ -3,15 +3,15 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { StarRating } from "@/components/star-rating"
 import { MapPin, User } from "lucide-react"
-import type { Psychiatrist } from "@/lib/data"
+import type { ProviderCard } from "@/lib/types"
 
 interface PsychiatristCardProps {
-  psychiatrist: Psychiatrist
+  psychiatrist: ProviderCard
 }
 
 export function PsychiatristCard({ psychiatrist }: PsychiatristCardProps) {
   return (
-    <Link href={`/psychiatrist/${psychiatrist.id}`}>
+    <Link href={`/psychiatrist/${psychiatrist.slug}`}>
       <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
         <CardContent className="p-5">
           <div className="flex gap-4">
@@ -23,7 +23,7 @@ export function PsychiatristCard({ psychiatrist }: PsychiatristCardProps) {
                 {psychiatrist.name}
               </h3>
               <p className="text-sm text-muted-foreground mb-2">
-                {psychiatrist.credentials}
+                {psychiatrist.credential || "Psychiatrist"}
               </p>
               <div className="flex items-center gap-2 mb-2">
                 <StarRating rating={psychiatrist.rating} size="sm" showValue />
@@ -34,7 +34,7 @@ export function PsychiatristCard({ psychiatrist }: PsychiatristCardProps) {
               <div className="flex items-center gap-1 text-sm text-muted-foreground mb-3">
                 <MapPin className="h-4 w-4 flex-shrink-0" />
                 <span className="truncate">
-                  {psychiatrist.location.city}, {psychiatrist.location.state}
+                  {psychiatrist.location.city || "Unknown City"}, {psychiatrist.location.state || "US"}
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -45,13 +45,17 @@ export function PsychiatristCard({ psychiatrist }: PsychiatristCardProps) {
                 ))}
               </div>
               <div className="mt-3">
-                {psychiatrist.acceptingPatients ? (
+                {psychiatrist.acceptingNewPatients === true ? (
                   <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-600 text-xs">
                     Accepting New Patients
                   </Badge>
-                ) : (
+                ) : psychiatrist.acceptingNewPatients === false ? (
                   <Badge variant="outline" className="text-xs">
                     Not Accepting Patients
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-xs">
+                    Availability Unknown
                   </Badge>
                 )}
               </div>
